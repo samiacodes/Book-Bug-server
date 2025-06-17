@@ -25,13 +25,13 @@ mongoose
 
 // Mongoose Schema & Model
 const bookSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  author: { type: String, required: true },
-  category: { type: String, required: true },
-  image: { type: String },
-  rating: { type: Number, min: 1, max: 5 },
-  quantity: { type: Number, required: true, min: 0 },
+  title: { type: String, required: true },
+  description: { type: String },
+  category: { type: String },
+  quantity: { type: Number, default: 0 },
+  available: { type: Boolean, default: true },
 });
+
 const borrowedSchema = new mongoose.Schema({
   userEmail: { type: String, required: true },
   bookId: { type: mongoose.Schema.Types.ObjectId, ref: "Book", required: true },
@@ -40,13 +40,18 @@ const borrowedSchema = new mongoose.Schema({
 });
 
 const BorrowedBook = mongoose.model("BorrowedBook", borrowedSchema);
-
 const Book = mongoose.model("Book", bookSchema);
 
 // Create Book (POST)
 app.post("/books", verifyFirebaseToken, async (req, res) => {
-  const { name, author, category, image, rating, quantity } = req.body;
-  const newBook = new Book({ name, author, category, image, rating, quantity });
+  const { title, description, category, quantity, available } = req.body;
+  const newBook = new Book({
+    title,
+    description,
+    category,
+    quantity,
+    available,
+  });
 
   try {
     await newBook.save();
@@ -87,6 +92,7 @@ app.get("/books/:id", async (req, res) => {
 
 // Update Book (PUT)
 app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { id } = req.params;
   const updatedBook = req.body;
 
@@ -101,6 +107,7 @@ app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
 
 // Borrow Book (POST)
 app.post("/borrow", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { userEmail, bookId } = req.body;
 
   try {
@@ -115,11 +122,6 @@ app.post("/borrow", verifyFirebaseToken, async (req, res) => {
         .json({ message: "You have already borrowed this book!" });
     }
 
-    const book = await Book.findById(bookId);
-    if (!book || book.quantity <= 0) {
-      return res.status(400).json({ message: "Book is not available!" });
-    }
-
     await Book.findByIdAndUpdate(bookId, { $inc: { quantity: -1 } });
 
     const borrowed = new BorrowedBook({ userEmail, bookId });
@@ -132,6 +134,7 @@ app.post("/borrow", verifyFirebaseToken, async (req, res) => {
 
 // Get Borrowed Books (GET)
 app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { email } = req.query;
   try {
     const borrowedBooks = await BorrowedBook.find({
@@ -147,6 +150,7 @@ app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
 
 // Return Book (DELETE)
 app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const borrowedId = req.params.id;
 
   try {
@@ -170,6 +174,7 @@ app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
 
 // Delete Book (DELETE)
 app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { id } = req.params;
 
   try {
