@@ -171,6 +171,29 @@ app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
     res.status(500).json({ message: "Failed to return book", error: err });
   }
 });
+app.put("/book/return", async (req, res) => {
+  try {
+    const { bookId } = req.body;
+    if (!bookId) {
+      return res.status(400).send({ error: "Book ID is required" });
+    }
+
+    // Increase the book quantity by 1 using $inc
+    const updatedBook = await Book.updateOne(
+      { _id: bookId },
+      { $inc: { quantity: 1 } } // Increment the book quantity by 1
+    );
+
+    if (updatedBook.modifiedCount === 0) {
+      return res.status(404).send({ error: "Book not found" });
+    }
+
+    res.status(200).send({ message: "Book quantity updated successfully" });
+  } catch (err) {
+    console.error("Error updating book quantity:", err);
+    res.status(500).send({ error: "Failed to update book quantity" });
+  }
+});
 
 // Delete Book (DELETE)
 app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
