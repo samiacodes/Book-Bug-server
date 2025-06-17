@@ -149,7 +149,7 @@ app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
 });
 
 // Return Book (DELETE)
-app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
+app.delete("/borrowed/:id",  async (req, res) => {
   // Firebase Token check added here
   const borrowedId = req.params.id;
 
