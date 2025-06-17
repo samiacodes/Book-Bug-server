@@ -10,7 +10,7 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: "*",
+    origin: "https://book-nest-202517.web.app", 
   })
 );
 
@@ -134,7 +134,7 @@ app.post("/borrow", verifyFirebaseToken, async (req, res) => {
 
 // Get Borrowed Books (GET)
 app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
-  // Firebase Token check added here
+  
   const { email } = req.query;
   try {
     const borrowedBooks = await BorrowedBook.find({
@@ -150,7 +150,7 @@ app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
 
 // Return Book (DELETE)
 app.delete("/borrowed/:id",  async (req, res) => {
-  // Firebase Token check added here
+  
   const borrowedId = req.params.id;
 
   try {
