@@ -6,7 +6,6 @@ const verifyFirebaseToken = require("./middleware/verifyFirebaseToken");
 const app = express();
 const port = process.env.PORT || 3000;
 
-// app.use(cors());
 app.use(express.json());
 
 app.use(
@@ -37,7 +36,7 @@ const borrowedSchema = new mongoose.Schema({
   userEmail: { type: String, required: true },
   bookId: { type: mongoose.Schema.Types.ObjectId, ref: "Book", required: true },
   borrowedDate: { type: Date, default: Date.now },
-  returnDate: { type: Date }, 
+  returnDate: { type: Date },
 });
 
 const BorrowedBook = mongoose.model("BorrowedBook", borrowedSchema);
@@ -45,7 +44,8 @@ const BorrowedBook = mongoose.model("BorrowedBook", borrowedSchema);
 const Book = mongoose.model("Book", bookSchema);
 
 // Create Book (POST)
-app.post("/books", async (req, res) => {
+app.post("/books", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { name, author, category, image, rating } = req.body;
   const newBook = new Book({ name, author, category, image, rating });
 
@@ -87,7 +87,8 @@ app.get("/books/:id", async (req, res) => {
 });
 
 // Update Book (PUT)
-app.put("/books/:id", async (req, res) => {
+app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { id } = req.params;
   const updatedBook = req.body;
 
@@ -100,8 +101,9 @@ app.put("/books/:id", async (req, res) => {
   }
 });
 
-// Borrow
-app.post("/borrow", async (req, res) => {
+// Borrow Book (POST)
+app.post("/borrow", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { userEmail, bookId } = req.body;
 
   try {
@@ -126,7 +128,9 @@ app.post("/borrow", async (req, res) => {
   }
 });
 
-app.get("/borrowed", async (req, res) => {
+// Get Borrowed Books (GET)
+app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { email } = req.query;
   try {
     const borrowedBooks = await BorrowedBook.find({
@@ -140,13 +144,18 @@ app.get("/borrowed", async (req, res) => {
   }
 });
 
-app.delete("/borrowed/:id", async (req, res) => {
+// Return Book (DELETE)
+app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const borrowedId = req.params.id;
 
   try {
     const borrowedEntry = await BorrowedBook.findById(borrowedId);
     if (!borrowedEntry)
       return res.status(404).json({ message: "Borrowed entry not found" });
+
+    borrowedEntry.returnDate = new Date();
+    await borrowedEntry.save();
 
     await Book.findByIdAndUpdate(borrowedEntry.bookId, {
       $inc: { quantity: 1 },
@@ -160,7 +169,8 @@ app.delete("/borrowed/:id", async (req, res) => {
 });
 
 // Delete Book (DELETE)
-app.delete("/books/:id", async (req, res) => {
+app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
+  // Firebase Token check added here
   const { id } = req.params;
 
   try {
@@ -172,10 +182,12 @@ app.delete("/books/:id", async (req, res) => {
   }
 });
 
+// Default Route
 app.get("/", (req, res) => {
   res.send("Book Nest Cooking");
 });
 
+// Start Server
 app.listen(port, () => {
-  console.log(`Book Nest Server Is running on port http://localhost:${port}`);
+  console.log(`Book Nest Server is running on port http://localhost:${port}`);
 });
