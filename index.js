@@ -139,14 +139,7 @@ app.get("/borrowed", async (req, res) => {
       .json({ message: "Failed to fetch borrowed books", error: err });
   }
 });
-app.post("/borrow-book", verifyFirebaseToken, (req, res) => {
-  const userEmail = req.user.email; 
 
-  res.send({
-    message: "Borrow successful!",
-    user: userEmail,
-  });
-});
 app.delete("/borrowed/:id", async (req, res) => {
   const borrowedId = req.params.id;
 
