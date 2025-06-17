@@ -1,3 +1,4 @@
+// middleware/verifyFirebaseToken.js
 const admin = require("../firebaseAdmin");
 
 const verifyFirebaseToken = async (req, res, next) => {
