@@ -45,9 +45,8 @@ const Book = mongoose.model("Book", bookSchema);
 
 // Create Book (POST)
 app.post("/books", verifyFirebaseToken, async (req, res) => {
-  // Firebase Token check added here
-  const { name, author, category, image, rating } = req.body;
-  const newBook = new Book({ name, author, category, image, rating });
+  const { name, author, category, image, rating, quantity } = req.body;
+  const newBook = new Book({ name, author, category, image, rating, quantity });
 
   try {
     await newBook.save();
@@ -88,7 +87,6 @@ app.get("/books/:id", async (req, res) => {
 
 // Update Book (PUT)
 app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
-  // Firebase Token check added here
   const { id } = req.params;
   const updatedBook = req.body;
 
@@ -103,7 +101,6 @@ app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
 
 // Borrow Book (POST)
 app.post("/borrow", verifyFirebaseToken, async (req, res) => {
-  // Firebase Token check added here
   const { userEmail, bookId } = req.body;
 
   try {
@@ -118,6 +115,11 @@ app.post("/borrow", verifyFirebaseToken, async (req, res) => {
         .json({ message: "You have already borrowed this book!" });
     }
 
+    const book = await Book.findById(bookId);
+    if (!book || book.quantity <= 0) {
+      return res.status(400).json({ message: "Book is not available!" });
+    }
+
     await Book.findByIdAndUpdate(bookId, { $inc: { quantity: -1 } });
 
     const borrowed = new BorrowedBook({ userEmail, bookId });
@@ -130,7 +132,6 @@ app.post("/borrow", verifyFirebaseToken, async (req, res) => {
 
 // Get Borrowed Books (GET)
 app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
-  // Firebase Token check added here
   const { email } = req.query;
   try {
     const borrowedBooks = await BorrowedBook.find({
@@ -146,7 +147,6 @@ app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
 
 // Return Book (DELETE)
 app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
-  // Firebase Token check added here
   const borrowedId = req.params.id;
 
   try {
@@ -170,7 +170,6 @@ app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
 
 // Delete Book (DELETE)
 app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
-  // Firebase Token check added here
   const { id } = req.params;
 
   try {
