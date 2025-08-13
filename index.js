@@ -2,7 +2,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
-const verifyFirebaseToken = require("./middleware/verifyFirebaseToken");
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -10,7 +9,7 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: "https://book-nest-202517.web.app", 
+    origin: "*"
   })
 );
 
@@ -43,7 +42,7 @@ const BorrowedBook = mongoose.model("BorrowedBook", borrowedSchema);
 const Book = mongoose.model("Book", bookSchema);
 
 // Create Book (POST)
-app.post("/books", verifyFirebaseToken, async (req, res) => {
+app.post("/books", async (req, res) => {
   const { title, description, category, quantity, available } = req.body;
   const newBook = new Book({
     title,
@@ -91,7 +90,7 @@ app.get("/books/:id", async (req, res) => {
 });
 
 // Update Book (PUT)
-app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
+app.put("/books/:id", async (req, res) => {
   // Firebase Token check added here
   const { id } = req.params;
   const updatedBook = req.body;
@@ -106,7 +105,7 @@ app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
 });
 
 // Borrow Book (POST)
-app.post("/borrow", verifyFirebaseToken, async (req, res) => {
+app.post("/borrow",  async (req, res) => {
   // Firebase Token check added here
   const { userEmail, bookId } = req.body;
 
@@ -133,7 +132,7 @@ app.post("/borrow", verifyFirebaseToken, async (req, res) => {
 });
 
 // Get Borrowed Books (GET)
-app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
+app.get("/borrowed",  async (req, res) => {
   
   const { email } = req.query;
   try {
@@ -181,7 +180,7 @@ app.put("/book/return", async (req, res) => {
     // Increase the book quantity by 1 using $inc
     const updatedBook = await Book.updateOne(
       { _id: bookId },
-      { $inc: { quantity: 1 } } // Increment the book quantity by 1
+      { $inc: { quantity: 1 } } 
     );
 
     if (updatedBook.modifiedCount === 0) {
@@ -196,7 +195,7 @@ app.put("/book/return", async (req, res) => {
 });
 
 // Delete Book (DELETE)
-app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
+app.delete("/books/:id",  async (req, res) => {
   // Firebase Token check added here
   const { id } = req.params;
 
