@@ -22,6 +22,9 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.log("MongoDB connection error:", err));
 
+// Import middleware
+const { verifyFirebaseToken, verifyAdmin } = require("./middleware/verifyFirebaseToken");
+
 // Mongoose Schema & Model
 const bookSchema = new mongoose.Schema({
   title: { type: String, required: true },
@@ -63,8 +66,18 @@ const reviewSchema = new mongoose.Schema(
 
 const Review = mongoose.model("Review", reviewSchema);
 
+// Banner Schema
+const bannerSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  subtitle: { type: String },
+  imageUrl: { type: String, required: true },
+  active: { type: Boolean, default: false },
+}, { timestamps: true });
+
+const Banner = mongoose.model("Banner", bannerSchema);
+
 // Create Book (POST)
-app.post("/books", async (req, res) => {
+app.post("/books", verifyFirebaseToken, async (req, res) => {
   const { title, description, category, quantity, available } = req.body;
   const newBook = new Book({
     title,
@@ -86,10 +99,20 @@ app.post("/books", async (req, res) => {
 app.get("/books", async (req, res) => {
   const category = req.query.category;
   const available = req.query.available === "true";
+  const search = req.query.search;
 
   let query = {};
   if (category) query.category = category;
   if (available) query.quantity = { $gt: 0 };
+  
+  // Add search functionality
+  if (search) {
+    query.$or = [
+      { title: { $regex: search, $options: "i" } },
+      { description: { $regex: search, $options: "i" } },
+      { category: { $regex: search, $options: "i" } }
+    ];
+  }
 
   try {
     const result = await Book.find(query);
@@ -112,8 +135,7 @@ app.get("/books/:id", async (req, res) => {
 });
 
 // Update Book (PUT)
-app.put("/books/:id", async (req, res) => {
-  // Firebase Token check added here
+app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
   const { id } = req.params;
   const updatedBook = req.body;
 
@@ -127,8 +149,7 @@ app.put("/books/:id", async (req, res) => {
 });
 
 // Borrow Book (POST)
-app.post("/borrow",  async (req, res) => {
-  // Firebase Token check added here
+app.post("/borrow", verifyFirebaseToken, async (req, res) => {
   const { userEmail, bookId } = req.body;
 
   try {
@@ -154,7 +175,7 @@ app.post("/borrow",  async (req, res) => {
 });
 
 // Get Borrowed Books (GET)
-app.get("/borrowed",  async (req, res) => {
+app.get("/borrowed", verifyFirebaseToken, async (req, res) => {
   
   const { email } = req.query;
   try {
@@ -170,7 +191,7 @@ app.get("/borrowed",  async (req, res) => {
 });
 
 // Return Book (DELETE)
-app.delete("/borrowed/:id",  async (req, res) => {
+app.delete("/borrowed/:id", verifyFirebaseToken, async (req, res) => {
   
   const borrowedId = req.params.id;
 
@@ -217,8 +238,7 @@ app.put("/book/return", async (req, res) => {
 });
 
 // Delete Book (DELETE)
-app.delete("/books/:id",  async (req, res) => {
-  // Firebase Token check added here
+app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -321,6 +341,112 @@ app.delete("/reviews/:id", async (req, res) => {
     res.status(200).json({ message: "Review deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete review", error: err });
+  }
+});
+
+// ==================== BANNER ROUTES ====================
+
+// Get All Banners (GET)
+app.get("/banners", async (req, res) => {
+  try {
+    const banners = await Banner.find().sort({ createdAt: -1 });
+    res.status(200).json(banners);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch banners", error: err });
+  }
+});
+
+// Get Active Banner (GET)
+app.get("/banners/active", async (req, res) => {
+  try {
+    const banner = await Banner.findOne({ active: true });
+    res.status(200).json(banner);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch active banner", error: err });
+  }
+});
+
+// Create Banner (POST) - Protected route
+app.post("/banners", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { title, subtitle, imageUrl, active } = req.body;
+    
+    // Create new banner
+    const newBanner = new Banner({
+      title,
+      subtitle,
+      imageUrl,
+      active
+    });
+    
+    const savedBanner = await newBanner.save();
+    res.status(201).json({ message: "Banner created successfully", banner: savedBanner });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to create banner", error: err });
+  }
+});
+
+// Update Banner (PUT) - Protected route
+app.put("/banners/:id", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, subtitle, imageUrl, active } = req.body;
+    
+    const updatedBanner = await Banner.findByIdAndUpdate(
+      id,
+      { title, subtitle, imageUrl, active },
+      { new: true }
+    );
+    
+    if (!updatedBanner) {
+      return res.status(404).json({ message: "Banner not found" });
+    }
+    
+    res.status(200).json({ message: "Banner updated successfully", banner: updatedBanner });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update banner", error: err });
+  }
+});
+
+// Delete Banner (DELETE) - Protected route
+app.delete("/banners/:id", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const deletedBanner = await Banner.findByIdAndDelete(id);
+    
+    if (!deletedBanner) {
+      return res.status(404).json({ message: "Banner not found" });
+    }
+    
+    res.status(200).json({ message: "Banner deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to delete banner", error: err });
+  }
+});
+
+// Set Active Banner (PUT) - Protected route
+app.put("/banners/:id/active", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // First, set all banners to inactive
+    await Banner.updateMany({}, { active: false });
+    
+    // Then, set the specified banner to active
+    const updatedBanner = await Banner.findByIdAndUpdate(
+      id,
+      { active: true },
+      { new: true }
+    );
+    
+    if (!updatedBanner) {
+      return res.status(404).json({ message: "Banner not found" });
+    }
+    
+    res.status(200).json({ message: "Banner set as active successfully", banner: updatedBanner });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to set active banner", error: err });
   }
 });
 
