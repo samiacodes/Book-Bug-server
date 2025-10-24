@@ -14,7 +14,7 @@ app.use(
 );
 
 // MongoDB URI
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.as2f3ea.mongodb.net/bookNest?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nxpjara.mongodb.net/?appName=Cluster0`;
 
 // MongoDB Connection
 mongoose
@@ -40,6 +40,28 @@ const borrowedSchema = new mongoose.Schema({
 
 const BorrowedBook = mongoose.model("BorrowedBook", borrowedSchema);
 const Book = mongoose.model("Book", bookSchema);
+
+// Review Schema
+const reviewSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    content: { type: String, required: true },
+    author: {
+      name: { type: String, required: true },
+      email: { type: String, required: true },
+      photoURL: { type: String, default: "" },
+    },
+    rating: { type: Number, min: 1, max: 5, default: 5 },
+    category: {
+      type: String,
+      enum: ["Review", "Blog", "Recommendation"],
+      default: "Review",
+    },
+  },
+  { timestamps: true }
+);
+
+const Review = mongoose.model("Review", reviewSchema);
 
 // Create Book (POST)
 app.post("/books", async (req, res) => {
@@ -205,6 +227,100 @@ app.delete("/books/:id",  async (req, res) => {
     res.json({ message: "Book deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete book", error: err });
+  }
+});
+
+// ==================== REVIEW ROUTES ====================
+
+// Get All Reviews (GET)
+app.get("/reviews", async (req, res) => {
+  try {
+    const reviews = await Review.find().sort({ createdAt: -1 });
+    res.status(200).json(reviews);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch reviews", error: err });
+  }
+});
+
+// Get Single Review (GET)
+app.get("/reviews/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const review = await Review.findById(id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.status(200).json(review);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch review", error: err });
+  }
+});
+
+// Create Review (POST)
+app.post("/reviews", async (req, res) => {
+  const { title, content, author, rating, category } = req.body;
+
+  if (!title || !content || !author?.name || !author?.email) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  const newReview = new Review({
+    title,
+    content,
+    author,
+    rating: rating || 5,
+    category: category || "Review",
+  });
+
+  try {
+    await newReview.save();
+    res.status(201).json({ message: "Review created successfully", review: newReview });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to create review", error: err });
+  }
+});
+
+// Update Review (PUT)
+app.put("/reviews/:id", async (req, res) => {
+  const { id } = req.params;
+  const { title, content, rating, category } = req.body;
+
+  try {
+    const review = await Review.findById(id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    // Only allow the author to update their review
+    if (req.body.userEmail && review.author.email !== req.body.userEmail) {
+      return res.status(403).json({ message: "Unauthorized to update this review" });
+    }
+
+    const updatedReview = await Review.findByIdAndUpdate(
+      id,
+      { title, content, rating, category },
+      { new: true }
+    );
+
+    res.status(200).json({ message: "Review updated successfully", review: updatedReview });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update review", error: err });
+  }
+});
+
+// Delete Review (DELETE)
+app.delete("/reviews/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const review = await Review.findById(id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    // Only allow the author to delete their review
+    if (req.body.userEmail && review.author.email !== req.body.userEmail) {
+      return res.status(403).json({ message: "Unauthorized to delete this review" });
+    }
+
+    await Review.findByIdAndDelete(id);
+    res.status(200).json({ message: "Review deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to delete review", error: err });
   }
 });
 
