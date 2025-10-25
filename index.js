@@ -560,6 +560,35 @@ app.delete("/categories/:id", verifyFirebaseToken, async (req, res) => {
   }
 });
 
+// ==================== USER MANAGEMENT ROUTES ====================
+
+// Get All Users (GET) - Admin only
+app.get("/users", verifyAdmin, async (req, res) => {
+  try {
+    // Import admin SDK
+    const admin = require("./firebaseAdmin");
+    
+    // Fetch all users from Firebase Authentication
+    const listUsersResult = await admin.auth().listUsers();
+    const users = listUsersResult.users.map(userRecord => ({
+      uid: userRecord.uid,
+      email: userRecord.email || '',
+      displayName: userRecord.displayName || '',
+      photoURL: userRecord.photoURL || '',
+      disabled: userRecord.disabled || false,
+      emailVerified: userRecord.emailVerified || false,
+      createdAt: userRecord.metadata.creationTime,
+      lastSignInAt: userRecord.metadata.lastSignInTime,
+      role: userRecord.email === 'admin@bookbug.com' ? 'admin' : 'user'
+    }));
+    
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ message: "Failed to fetch users", error: err.message });
+  }
+});
+
 // ==================== DASHBOARD STATISTICS ROUTES ====================
 
 // Get Dashboard Statistics (GET)
