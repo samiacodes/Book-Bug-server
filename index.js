@@ -23,7 +23,7 @@ mongoose
   .catch((err) => console.log("MongoDB connection error:", err));
 
 // Import middleware
-const { verifyFirebaseToken, verifyAdmin } = require("./middleware/verifyFirebaseToken");
+const { verifyFirebaseToken } = require("./middleware/verifyFirebaseToken");
 
 // Mongoose Schema & Model
 const bookSchema = new mongoose.Schema({
@@ -563,8 +563,13 @@ app.delete("/categories/:id", verifyFirebaseToken, async (req, res) => {
 // ==================== USER MANAGEMENT ROUTES ====================
 
 // Get All Users (GET) - Admin only
-app.get("/users", verifyAdmin, async (req, res) => {
+app.get("/users", verifyFirebaseToken, async (req, res) => {
   try {
+    // Check if user is admin by email (matching client-side logic)
+    if (req.user.email !== "admin@bookbug.com") {
+      return res.status(403).send({ error: "Forbidden - Admin access required" });
+    }
+    
     // Import admin SDK
     const admin = require("./firebaseAdmin");
     
