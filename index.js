@@ -76,22 +76,34 @@ const bannerSchema = new mongoose.Schema({
 
 const Banner = mongoose.model("Banner", bannerSchema);
 
+// Import Category model
+const Category = require("./models/Category");
+
 // Create Book (POST)
 app.post("/books", verifyFirebaseToken, async (req, res) => {
-  const { title, description, category, quantity, available } = req.body;
+  const { title, author, description, category, quantity, available, image, rating } = req.body;
+  
+  // Validate required fields
+  if (!title || !author) {
+    return res.status(400).json({ message: "Title and author are required" });
+  }
+  
   const newBook = new Book({
     title,
-    description,
-    category,
-    quantity,
-    available,
+    author,
+    description: description || "",
+    category: category || "Uncategorized",
+    quantity: quantity !== undefined ? quantity : 0,
+    available: available !== undefined ? available : true,
+    image: image || "",
+    rating: rating !== undefined ? rating : 5
   });
 
   try {
     await newBook.save();
     res.status(201).json({ message: "Book added successfully", newBook });
   } catch (err) {
-    res.status(500).json({ message: "Failed to add book", error: err });
+    res.status(500).json({ message: "Failed to add book", error: err.message });
   }
 });
 
@@ -137,14 +149,25 @@ app.get("/books/:id", async (req, res) => {
 // Update Book (PUT)
 app.put("/books/:id", verifyFirebaseToken, async (req, res) => {
   const { id } = req.params;
-  const updatedBook = req.body;
+  const { title, author, description, category, quantity, available, image, rating } = req.body;
+  
+  // Prepare update object with only provided fields
+  const updateFields = {};
+  if (title !== undefined) updateFields.title = title;
+  if (author !== undefined) updateFields.author = author;
+  if (description !== undefined) updateFields.description = description;
+  if (category !== undefined) updateFields.category = category;
+  if (quantity !== undefined) updateFields.quantity = quantity;
+  if (available !== undefined) updateFields.available = available;
+  if (image !== undefined) updateFields.image = image;
+  if (rating !== undefined) updateFields.rating = rating;
 
   try {
-    const result = await Book.findByIdAndUpdate(id, updatedBook, { new: true });
+    const result = await Book.findByIdAndUpdate(id, updateFields, { new: true });
     if (!result) return res.status(404).json({ message: "Book not found" });
     res.json({ message: "Book updated successfully", updatedBook: result });
   } catch (err) {
-    res.status(500).json({ message: "Failed to update book", error: err });
+    res.status(500).json({ message: "Failed to update book", error: err.message });
   }
 });
 
@@ -447,6 +470,145 @@ app.put("/banners/:id/active", verifyFirebaseToken, async (req, res) => {
     res.status(200).json({ message: "Banner set as active successfully", banner: updatedBanner });
   } catch (err) {
     res.status(500).json({ message: "Failed to set active banner", error: err });
+  }
+});
+
+// ==================== CATEGORY ROUTES ====================
+
+// Get All Categories (GET)
+app.get("/categories", async (req, res) => {
+  try {
+    const categories = await Category.find().sort({ name: 1 });
+    res.status(200).json(categories);
+  } catch (err) {
+    console.error("Error fetching categories:", err);
+    res.status(500).json({ message: "Failed to fetch categories", error: err.message });
+  }
+});
+
+// Create Category (POST)
+app.post("/categories", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    
+    // Check if category already exists
+    const existingCategory = await Category.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+    if (existingCategory) {
+      return res.status(400).json({ message: "Category already exists" });
+    }
+    
+    const newCategory = new Category({
+      name,
+      description
+    });
+    
+    await newCategory.save();
+    res.status(201).json({ message: "Category created successfully", category: newCategory });
+  } catch (err) {
+    console.error("Error creating category:", err);
+    res.status(500).json({ message: "Failed to create category", error: err.message });
+  }
+});
+
+// Update Category (PUT)
+app.put("/categories/:id", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    
+    // Check if another category with the same name exists
+    const existingCategory = await Category.findOne({ 
+      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      _id: { $ne: id }
+    });
+    if (existingCategory) {
+      return res.status(400).json({ message: "Category name already exists" });
+    }
+    
+    const updatedCategory = await Category.findByIdAndUpdate(
+      id,
+      { name, description, updatedAt: Date.now() },
+      { new: true }
+    );
+    
+    if (!updatedCategory) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    
+    res.status(200).json({ message: "Category updated successfully", category: updatedCategory });
+  } catch (err) {
+    console.error("Error updating category:", err);
+    res.status(500).json({ message: "Failed to update category", error: err.message });
+  }
+});
+
+// Delete Category (DELETE)
+app.delete("/categories/:id", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const deletedCategory = await Category.findByIdAndDelete(id);
+    
+    if (!deletedCategory) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    
+    res.status(200).json({ message: "Category deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting category:", err);
+    res.status(500).json({ message: "Failed to delete category", error: err.message });
+  }
+});
+
+// ==================== DASHBOARD STATISTICS ROUTES ====================
+
+// Get Dashboard Statistics (GET)
+app.get("/dashboard/stats", async (req, res) => {
+  try {
+    // Get total books count
+    const totalBooks = await Book.countDocuments();
+    
+    // Get total banners count
+    const totalBanners = await Banner.countDocuments();
+    
+    // Get borrowed books count (books that have been borrowed but not returned)
+    const borrowedBooks = await BorrowedBook.countDocuments({ returnDate: null });
+    
+    // Get all books to calculate categories (matching frontend logic)
+    const books = await Book.find();
+    const categories = [...new Set(books.map(book => book.category).filter(Boolean))].length;
+    
+    // For total users, we would typically integrate with Firebase Admin SDK
+    // Since we don't have direct access to Firebase users, we'll estimate based on borrowed books
+    // In a real implementation, you would use Firebase Admin SDK to get actual user count
+    const totalUsers = await BorrowedBook.distinct("userEmail").then(users => users.length);
+    
+    const stats = {
+      totalBooks,
+      totalUsers,
+      borrowedBooks,
+      categories,
+      totalBanners
+    };
+    
+    console.log("Dashboard stats response:", JSON.stringify(stats, null, 2));
+    
+    res.status(200).json(stats);
+  } catch (err) {
+    console.error("Error fetching dashboard stats:", err);
+    res.status(500).json({ message: "Failed to fetch dashboard statistics", error: err.message });
+  }
+});
+
+// Get Recent Books (GET)
+app.get("/dashboard/recent-books", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+    const recentBooks = await Book.find().sort({ _id: -1 }).limit(limit);
+    res.status(200).json(recentBooks);
+  } catch (err) {
+    console.error("Error fetching recent books:", err);
+    res.status(500).json({ message: "Failed to fetch recent books", error: err.message });
   }
 });
 
