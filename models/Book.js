@@ -9,7 +9,9 @@ const BookSchema = new mongoose.Schema({
   quantity: { type: Number, default: 0 }, 
   available: { type: Boolean, default: true },
   image: { type: String, default: "" }, // Cloudinary URL
-  rating: { type: Number, min: 1, max: 5, default: 5 }
+  rating: { type: Number, min: 1, max: 5, default: 5 },
+  averageRating: { type: Number, default: 0 },
+  reviewCount: { type: Number, default: 0 }
 }, { timestamps: true });
 
 // Add pre-save middleware to ensure required fields

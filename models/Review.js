@@ -1,4 +1,4 @@
-
+const mongoose = require("mongoose");
 
 const reviewSchema = new mongoose.Schema(
   {
@@ -36,9 +36,14 @@ const reviewSchema = new mongoose.Schema(
       enum: ["Review", "Blog", "Recommendation"],
       default: "Review",
     },
+    bookId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Book",
+      required: true,
+    },
   },
   {
-    timestamps: true, // Automatically adds createdAt and updatedAt
+    timestamps: true, 
   }
 );
 

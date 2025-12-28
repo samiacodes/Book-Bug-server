@@ -25,14 +25,8 @@ mongoose
 // Import middleware
 const { verifyFirebaseToken } = require("./middleware/verifyFirebaseToken");
 
-// Mongoose Schema & Model
-const bookSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  description: { type: String },
-  category: { type: String },
-  quantity: { type: Number, default: 0 },
-  available: { type: Boolean, default: true },
-});
+// Import models
+const Book = require("./models/Book");
 
 const borrowedSchema = new mongoose.Schema({
   userEmail: { type: String, required: true },
@@ -42,29 +36,38 @@ const borrowedSchema = new mongoose.Schema({
 });
 
 const BorrowedBook = mongoose.model("BorrowedBook", borrowedSchema);
-const Book = mongoose.model("Book", bookSchema);
 
-// Review Schema
-const reviewSchema = new mongoose.Schema(
-  {
-    title: { type: String, required: true, trim: true },
-    content: { type: String, required: true },
-    author: {
-      name: { type: String, required: true },
-      email: { type: String, required: true },
-      photoURL: { type: String, default: "" },
-    },
-    rating: { type: Number, min: 1, max: 5, default: 5 },
-    category: {
-      type: String,
-      enum: ["Review", "Blog", "Recommendation"],
-      default: "Review",
-    },
-  },
-  { timestamps: true }
-);
+// Import models
+const Review = require("./models/Review");
 
-const Review = mongoose.model("Review", reviewSchema);
+// Function to update book's average rating and review count
+const updateBookRating = async (bookId) => {
+  try {
+    // Get all reviews for this book
+    const reviews = await Review.find({ bookId });
+    
+    if (reviews.length === 0) {
+      // If no reviews, reset to default values
+      await Book.findByIdAndUpdate(bookId, {
+        averageRating: 0,
+        reviewCount: 0
+      });
+      return;
+    }
+    
+    // Calculate average rating
+    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+    const averageRating = totalRating / reviews.length;
+    
+    // Update book with new average rating and review count
+    await Book.findByIdAndUpdate(bookId, {
+      averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal place
+      reviewCount: reviews.length
+    });
+  } catch (err) {
+    console.error("Error updating book rating:", err);
+  }
+};
 
 // Banner Schema
 const bannerSchema = new mongoose.Schema({
@@ -76,7 +79,7 @@ const bannerSchema = new mongoose.Schema({
 
 const Banner = mongoose.model("Banner", bannerSchema);
 
-// Import Category model
+// Import models
 const Category = require("./models/Category");
 
 // Create Book (POST)
@@ -265,9 +268,20 @@ app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Find the book to delete to get its ID for reference
+    const bookToDelete = await Book.findById(id);
+    if (!bookToDelete) return res.status(404).json({ message: "Book not found" });
+    
+    // Delete all reviews associated with this book
+    await Review.deleteMany({ bookId: id });
+    
+    // Delete all borrowed records for this book
+    await BorrowedBook.deleteMany({ bookId: id });
+    
+    // Delete the book itself
     const result = await Book.findByIdAndDelete(id);
-    if (!result) return res.status(404).json({ message: "Book not found" });
-    res.json({ message: "Book deleted successfully" });
+    
+    res.json({ message: "Book, associated reviews, and borrowed records deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete book", error: err });
   }
@@ -278,7 +292,14 @@ app.delete("/books/:id", verifyFirebaseToken, async (req, res) => {
 // Get All Reviews (GET)
 app.get("/reviews", async (req, res) => {
   try {
-    const reviews = await Review.find().sort({ createdAt: -1 });
+    let query = {};
+    
+    // Filter by bookId if provided
+    if (req.query.bookId) {
+      query.bookId = req.query.bookId;
+    }
+    
+    const reviews = await Review.find(query).sort({ createdAt: -1 });
     res.status(200).json(reviews);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch reviews", error: err });
@@ -299,10 +320,16 @@ app.get("/reviews/:id", async (req, res) => {
 
 // Create Review (POST)
 app.post("/reviews", async (req, res) => {
-  const { title, content, author, rating, category } = req.body;
+  const { title, content, author, rating, category, bookId } = req.body;
 
-  if (!title || !content || !author?.name || !author?.email) {
+  if (!title || !content || !author?.name || !author?.email || !bookId) {
     return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  // Verify that the book exists
+  const book = await Book.findById(bookId);
+  if (!book) {
+    return res.status(404).json({ message: "Book not found" });
   }
 
   const newReview = new Review({
@@ -311,10 +338,15 @@ app.post("/reviews", async (req, res) => {
     author,
     rating: rating || 5,
     category: category || "Review",
+    bookId,
   });
 
   try {
     await newReview.save();
+    
+    // Update book's average rating and review count
+    await updateBookRating(bookId);
+    
     res.status(201).json({ message: "Review created successfully", review: newReview });
   } catch (err) {
     res.status(500).json({ message: "Failed to create review", error: err });
@@ -324,7 +356,7 @@ app.post("/reviews", async (req, res) => {
 // Update Review (PUT)
 app.put("/reviews/:id", async (req, res) => {
   const { id } = req.params;
-  const { title, content, rating, category } = req.body;
+  const { title, content, rating, category, bookId } = req.body;
 
   try {
     const review = await Review.findById(id);
@@ -335,11 +367,21 @@ app.put("/reviews/:id", async (req, res) => {
       return res.status(403).json({ message: "Unauthorized to update this review" });
     }
 
+    const updateData = { title, content, rating, category };
+    
+    // Only update bookId if it's provided
+    if (bookId !== undefined) {
+      updateData.bookId = bookId;
+    }
+
     const updatedReview = await Review.findByIdAndUpdate(
       id,
-      { title, content, rating, category },
+      updateData,
       { new: true }
     );
+    
+    // Update book's average rating and review count
+    await updateBookRating(updatedReview.bookId);
 
     res.status(200).json({ message: "Review updated successfully", review: updatedReview });
   } catch (err) {
@@ -361,6 +403,10 @@ app.delete("/reviews/:id", async (req, res) => {
     }
 
     await Review.findByIdAndDelete(id);
+    
+    // Update book's average rating and review count
+    await updateBookRating(review.bookId);
+    
     res.status(200).json({ message: "Review deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete review", error: err });
